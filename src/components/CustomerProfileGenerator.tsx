@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card'
 import { Button } from './ui/button'
 import { Textarea } from './ui/textarea'
@@ -6,8 +6,10 @@ import { Label } from './ui/label'
 import { Progress } from './ui/progress'
 import { Badge } from './ui/badge'
 import { Separator } from './ui/separator'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs'
 import { blink } from '../blink/client'
-import { Sparkles, Target, Users, Download, RefreshCw } from 'lucide-react'
+import { Sparkles, Target, Users, Download, RefreshCw, BookOpen, Save, FileText, Edit3, Lightbulb } from 'lucide-react'
 
 interface User {
   id: string
@@ -44,6 +46,46 @@ interface CustomerProfileGeneratorProps {
   user: User
 }
 
+interface ExampleTemplate {
+  id: string
+  title: string
+  description: string
+  vision: string
+  mission: string
+  business: string
+  target: string
+}
+
+const EXAMPLE_TEMPLATES: ExampleTemplate[] = [
+  {
+    id: 'creative-agency',
+    title: 'Creative Design Agency',
+    description: 'A boutique design agency focusing on brand identity',
+    vision: 'To become the go-to creative partner for innovative brands worldwide',
+    mission: 'We help businesses tell their story through compelling visual design and strategic branding',
+    business: 'We are a full-service creative agency specializing in brand identity, web design, and marketing materials. We work with startups and established businesses to create memorable brand experiences.',
+    target: 'Small to medium businesses, startups, entrepreneurs who value good design and want to stand out in their market'
+  },
+  {
+    id: 'wellness-coach',
+    title: 'Wellness & Life Coach',
+    description: 'Personal coaching for holistic wellness',
+    vision: 'To empower individuals to live their most authentic and fulfilling lives',
+    mission: 'We guide people through transformative wellness journeys using holistic approaches to mind, body, and spirit',
+    business: 'I offer one-on-one coaching sessions, group workshops, and online courses focused on stress management, mindfulness, nutrition, and personal development.',
+    target: 'Busy professionals, women in their 30s-50s, people going through life transitions, health-conscious individuals'
+  },
+  {
+    id: 'tech-startup',
+    title: 'SaaS Tech Startup',
+    description: 'B2B software solution for productivity',
+    vision: 'To revolutionize how teams collaborate and manage projects',
+    mission: 'We build intuitive software tools that help teams work smarter, not harder',
+    business: 'We develop cloud-based project management and collaboration software for remote and hybrid teams. Our platform integrates with popular tools and focuses on simplicity and user experience.',
+    target: 'Remote teams, project managers, small to medium businesses, tech-savvy professionals, startups'
+  }
+]
+
 export function CustomerProfileGenerator({ user }: CustomerProfileGeneratorProps) {
   const [step, setStep] = useState(1)
   const [visionStatement, setVisionStatement] = useState('')
@@ -52,9 +94,64 @@ export function CustomerProfileGenerator({ user }: CustomerProfileGeneratorProps
   const [targetMarket, setTargetMarket] = useState('')
   const [isGenerating, setIsGenerating] = useState(false)
   const [customerProfile, setCustomerProfile] = useState<CustomerProfile | null>(null)
+  const [savedProfiles, setSavedProfiles] = useState<any[]>([])
+  const [isSaving, setIsSaving] = useState(false)
+  const [showTemplates, setShowTemplates] = useState(false)
 
   const totalSteps = 3
   const progress = (step / totalSteps) * 100
+
+  // Load saved profiles on component mount
+  useEffect(() => {
+    loadSavedProfiles()
+  }, [loadSavedProfiles])
+
+  const loadSavedProfiles = useCallback(async () => {
+    try {
+      // For now, we'll use localStorage as fallback
+      const saved = localStorage.getItem(`profiles_${user.id}`)
+      if (saved) {
+        setSavedProfiles(JSON.parse(saved))
+      }
+    } catch (error) {
+      console.error('Error loading saved profiles:', error)
+    }
+  }, [user.id])
+
+  const saveProfile = async () => {
+    if (!customerProfile) return
+    
+    setIsSaving(true)
+    try {
+      const profileData = {
+        id: Date.now().toString(),
+        profileName: `Profile ${new Date().toLocaleDateString()}`,
+        visionStatement,
+        missionStatement,
+        businessDescription,
+        targetMarket,
+        customerProfile,
+        createdAt: new Date().toISOString()
+      }
+
+      const updated = [...savedProfiles, profileData]
+      setSavedProfiles(updated)
+      localStorage.setItem(`profiles_${user.id}`, JSON.stringify(updated))
+    } catch (error) {
+      console.error('Error saving profile:', error)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const loadTemplate = (template: ExampleTemplate) => {
+    setVisionStatement(template.vision)
+    setMissionStatement(template.mission)
+    setBusinessDescription(template.business)
+    setTargetMarket(template.target)
+    setShowTemplates(false)
+    setStep(2) // Move to step 2 after loading template
+  }
 
   const handleGenerate = async () => {
     setIsGenerating(true)
@@ -124,7 +221,7 @@ export function CustomerProfileGenerator({ user }: CustomerProfileGeneratorProps
     }
   }
 
-  const handleExport = () => {
+  const handleExportJSON = () => {
     if (!customerProfile) return
     
     const exportData = {
@@ -143,6 +240,63 @@ export function CustomerProfileGenerator({ user }: CustomerProfileGeneratorProps
     const a = document.createElement('a')
     a.href = url
     a.download = 'customer-profile.json'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  const handleExportText = () => {
+    if (!customerProfile) return
+    
+    const textContent = `
+CUSTOMER PROFILE REPORT
+Generated: ${new Date().toLocaleDateString()}
+
+BUSINESS INFORMATION
+Vision Statement: ${visionStatement}
+Mission Statement: ${missionStatement}
+Business Description: ${businessDescription}
+Target Market: ${targetMarket || 'Not specified'}
+
+CUSTOMER PROFILE
+
+DEMOGRAPHICS
+Age Range: ${customerProfile.demographics.ageRange}
+Gender: ${customerProfile.demographics.gender}
+Location: ${customerProfile.demographics.location}
+Income Level: ${customerProfile.demographics.income}
+Education: ${customerProfile.demographics.education}
+
+PSYCHOGRAPHICS
+Values: ${customerProfile.psychographics.values.join(', ')}
+Interests: ${customerProfile.psychographics.interests.join(', ')}
+Lifestyle: ${customerProfile.psychographics.lifestyle}
+Personality: ${customerProfile.psychographics.personality}
+
+PAIN POINTS
+${customerProfile.painPoints.map(point => `• ${point}`).join('\n')}
+
+MOTIVATIONS
+${customerProfile.motivations.map(motivation => `• ${motivation}`).join('\n')}
+
+GOALS
+${customerProfile.goals.map(goal => `• ${goal}`).join('\n')}
+
+COMMUNICATION CHANNELS
+${customerProfile.communicationChannels.join(', ')}
+
+BUYING BEHAVIOR
+Decision Factors: ${customerProfile.buyingBehavior.decisionFactors.join(', ')}
+Purchase Process: ${customerProfile.buyingBehavior.purchaseProcess}
+Budget Range: ${customerProfile.buyingBehavior.budget}
+    `.trim()
+    
+    const blob = new Blob([textContent], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'customer-profile.txt'
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
@@ -199,6 +353,57 @@ export function CustomerProfileGenerator({ user }: CustomerProfileGeneratorProps
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
+              {/* Templates Section */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-medium">Need inspiration?</h3>
+                  <p className="text-xs text-muted-foreground">Try one of our example templates</p>
+                </div>
+                <Dialog open={showTemplates} onOpenChange={setShowTemplates}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <BookOpen className="h-4 w-4 mr-2" />
+                      View Templates
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+                    <DialogHeader>
+                      <DialogTitle>Example Business Templates</DialogTitle>
+                      <DialogDescription>
+                        Choose a template to get started quickly. You can customize it after loading.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 mt-4">
+                      {EXAMPLE_TEMPLATES.map((template) => (
+                        <Card key={template.id} className="cursor-pointer hover:bg-accent/50 transition-colors" onClick={() => loadTemplate(template)}>
+                          <CardHeader className="pb-3">
+                            <div className="flex items-center justify-between">
+                              <CardTitle className="text-lg">{template.title}</CardTitle>
+                              <Button size="sm" variant="ghost">
+                                <Lightbulb className="h-4 w-4" />
+                              </Button>
+                            </div>
+                            <CardDescription>{template.description}</CardDescription>
+                          </CardHeader>
+                          <CardContent className="pt-0">
+                            <div className="space-y-2 text-sm">
+                              <div>
+                                <span className="font-medium">Vision:</span> {template.vision.substring(0, 100)}...
+                              </div>
+                              <div>
+                                <span className="font-medium">Mission:</span> {template.mission.substring(0, 100)}...
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              </div>
+
+              <Separator />
+
               <div className="space-y-2">
                 <Label htmlFor="vision">Vision Statement</Label>
                 <Textarea
@@ -302,10 +507,24 @@ export function CustomerProfileGenerator({ user }: CustomerProfileGeneratorProps
                     Your Ideal Customer Profile
                   </span>
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={handleExport}>
-                      <Download className="h-4 w-4 mr-2" />
-                      Export
+                    <Button variant="outline" size="sm" onClick={saveProfile} disabled={isSaving}>
+                      {isSaving ? (
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <Save className="h-4 w-4 mr-2" />
+                      )}
+                      {isSaving ? 'Saving...' : 'Save Profile'}
                     </Button>
+                    <div className="flex gap-1">
+                      <Button variant="outline" size="sm" onClick={handleExportJSON}>
+                        <FileText className="h-4 w-4 mr-2" />
+                        JSON
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={handleExportText}>
+                        <Download className="h-4 w-4 mr-2" />
+                        Text
+                      </Button>
+                    </div>
                     <Button variant="outline" size="sm" onClick={handleReset}>
                       <RefreshCw className="h-4 w-4 mr-2" />
                       Start Over
